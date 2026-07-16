@@ -1,25 +1,50 @@
+
 # AI Inference Gateway — Claude Code Instructions
 
 ## Project Context
-Production-grade FastAPI backend serving as intelligent gateway to local Ollama LLMs. Specs-driven development — always refer to specs/SPEC.md before implementing.
+Production-grade FastAPI backend serving as an intelligent multi-model gateway to local Ollama LLMs. Features smart query classification, automatic model routing, prompt engineering pipeline, streaming responses, and full request metadata tracking.
 
-## Rules
-- Always follow specs/SPEC.md for architecture and data models
-- Use Python 3.12+ features (type hints with | syntax)
-- All services must be async
-- All Pydantic models use v2 syntax (model_dump, model_validate)
-- Error handling: never crash, always return structured error response
-- Every function needs docstring explaining what it does
-- Use structlog for logging, not print statements
+This project follows specs-driven development. ALWAYS read specs/SPEC.md before implementing anything.
 
-## Code Style
-- Type hints on every function parameter and return type
-- Pydantic models for ALL request/response data
-- Async/await for all I/O operations
-- Dependency injection via FastAPI Depends()
-- Custom exceptions in app/core/exceptions.py
+## Theme & Design Language
+- Dark theme (gray-900/950 backgrounds)
+- Accent color: Indigo-500/Blue-500 gradient
+- Font: Inter (Google Fonts CDN)
+- Rounded corners (rounded-xl on cards, rounded-2xl on main containers)
+- Subtle glass morphism effects (backdrop-blur, bg-opacity)
+- Smooth transitions and animations
+- ChatGPT-style chat interface with streaming text
+- Metadata shown as small badges below AI responses
+- Professional, clean, minimal — NOT colorful or playful
+- Mobile responsive with Tailwind breakpoints
 
-## Git Workflow
-- Commit after each module completion
-- Commit message format: "feat(module-N): description"
-- Push daily
+## Tech Stack
+- Python 3.12+ with modern type hints (str | None, not Optional[str])
+- FastAPI with async everywhere
+- Pydantic v2 (model_dump, model_validate, Field)
+- Ollama for local LLM inference via httpx
+- Jinja2 templates served from FastAPI
+- Tailwind CSS via CDN for styling
+- Vanilla JavaScript for streaming and interactivity
+- structlog for JSON logging
+- python-dotenv for environment variables
+
+## Architecture
+
+- User (Browser) → Jinja2 Chat UI → JavaScript fetch/SSE
+- ↓
+- FastAPI Server (uvicorn)
+- ↓
+- Request Validation (Pydantic models in app/models/)
+- ↓
+- Query Classifier (app/services/router_service.py)
+- ↓
+- Model Router → selects best Ollama model
+- ↓
+- Prompt Engineer (app/services/prompt_service.py)
+- ↓
+- Ollama LLM Call via httpx (app/services/llm_service.py)
+- ↓
+- Response with full metadata → streamed back to UI
+
+
