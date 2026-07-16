@@ -4,7 +4,7 @@
 ## Project Context
 Production-grade FastAPI backend serving as an intelligent multi-model gateway to local Ollama LLMs. Features smart query classification, automatic model routing, prompt engineering pipeline, streaming responses, and full request metadata tracking.
 
-This project follows specs-driven development. ALWAYS read specs/SPEC.md before implementing anything.
+This project follows phase-wise specs-driven development. Each phase has its own spec in .claude/specs/. Always read the relevant phase spec before implementing.
 
 ## Theme & Design Language
 - Dark theme (gray-900/950 backgrounds)
