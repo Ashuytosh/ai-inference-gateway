@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AI Inference Gateway{% endblock %}</title>
+
+    <!-- Tailwind CSS via CDN -- no build step needed for a project this
+         size; the JIT compiler scans class names in the served HTML at
+         request time in the browser. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Extend Tailwind's default theme rather than replacing it, so
+        // every utility class still works -- we're only adding the
+        // 'font-sans' -> Inter mapping used throughout the templates.
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Inter font (Google Fonts CDN), per CLAUDE.md design language -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Project-specific CSS for things Tailwind utilities can't express
+         cleanly (scrollbar theming, keyframe animations, etc). -->
+    <link rel="stylesheet" href="/static/css/custom.css">
+
+    {% block head %}{% endblock %}
+</head>
+<body class="h-full bg-gray-950 text-gray-100 font-sans antialiased">
+    {% block body %}{% endblock %}
+
+    <!-- Lucide icon set -- lightweight SVG icons referenced via
+         <i data-lucide="..."></i>. icons() must be called after the DOM
+         (including any dynamically inserted icon markup) is ready --
+         chat.js does this in initApp(). -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

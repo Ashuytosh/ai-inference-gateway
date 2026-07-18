@@ -45,11 +45,50 @@ class ResponseMetadata(BaseModel):
     # overrides our auto-strategy entirely (see PromptService.build_messages).
     prompt_strategy: str | None = None
 
+    # Which OutputFormat was requested ("text", "sentiment", ...) --
+    # None only in contexts that predate structured output entirely;
+    # in practice this is always set now, defaulting to "text".
+    output_format: str | None = None
+
+    # How many LLM calls it took to get valid structured output: 1 means
+    # the first attempt already parsed cleanly; up to 3 if OutputParser
+    # had to retry with a stricter prompt (see chat.py's retry loop).
+    # Always 1 for output_format="text", where no parsing happens.
+    parse_attempts: int = 1
+
+    # How sure QueryClassifier was about query_type (0.0-1.0). Low
+    # confidence values are the signal that triggered an LLM-tier
+    # classification instead of trusting the cheap heuristic outright
+    # (see RouterService.classifier.classify_smart).
+    classification_confidence: float = 0.0
+
+    # Which classification tier actually produced query_type: "heuristic"
+    # (fast keyword/length rules), "llm" (heuristic was uncertain, a
+    # small model resolved it), or "heuristic-fallback" (heuristic was
+    # uncertain but no LLM service was available to escalate to).
+    classification_method: str | None = None
+
+    # Rough token count of the full prompt sent to the model (system +
+    # user message combined), from OllamaService.estimate_tokens's
+    # chars-per-4 heuristic -- not exact, but enough to warn/truncate
+    # before hitting the model's real context window.
+    context_tokens_estimated: int | None = None
+
+    # The context window size that context_tokens_estimated was compared
+    # against (see chat.py's context check). None only in contexts that
+    # skip the check entirely.
+    context_limit: int | None = None
+
 
 class ChatResponse(BaseModel):
     """Body returned by POST /api/chat."""
 
-    response: str
+    response: str  # always present -- raw text, even when parsed is set
+    # Structured data once output_format != TEXT and parsing succeeded;
+    # None for plain text requests, and also None if every parse attempt
+    # (initial + retries) failed -- callers should check this rather than
+    # assume it's always populated when they asked for a structured format.
+    parsed: dict | None = None
     metadata: ResponseMetadata
 
 
@@ -71,6 +110,18 @@ class ModelsListResponse(BaseModel):
     total: int
 
 
+class CircuitBreakerStatus(BaseModel):
+    """
+    Snapshot of OllamaCircuitBreaker's state (see
+    app/services/llm_service.py) for GET /health to expose. A kept-as-a-
+    typed-model (rather than a raw dict) so this response field gets the
+    same output validation as everything else in this file.
+    """
+
+    state: str  # "closed", "open", or "half_open"
+    failure_count: int
+
+
 class HealthResponse(BaseModel):
     """Body returned by GET /health."""
 
@@ -79,6 +130,14 @@ class HealthResponse(BaseModel):
     models_loaded: int
     uptime_seconds: float
     version: str
+    # Actual names of models currently resident in VRAM (from Ollama's
+    # GET /api/ps) -- lets a caller see *which* models are loaded, not
+    # just the count.
+    loaded_model_names: list[str] = Field(default_factory=list)
+    # Whether the circuit breaker protecting Ollama calls is currently
+    # letting requests through (closed), rejecting them immediately
+    # (open), or testing recovery with one request (half_open).
+    circuit_breaker: CircuitBreakerStatus
 
 
 class ErrorResponse(BaseModel):

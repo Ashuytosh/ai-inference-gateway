@@ -61,6 +61,21 @@ class Settings(BaseSettings):
     # same thing wherever it's set.
     keep_alive: str = Field(default="30m", alias="OLLAMA_KEEP_ALIVE")
 
+    # --- Phase 6: rate limiting (see app/core/rate_limiter.py) ---
+    # Max requests a single client (identified by IP) may make within
+    # rate_limit_window seconds before getting a 429.
+    rate_limit_requests: int = 30
+    rate_limit_window: int = 60
+
+    # --- Phase 6: circuit breaker (see OllamaCircuitBreaker in
+    # app/services/llm_service.py) ---
+    # Consecutive Ollama connection/timeout failures before the breaker
+    # trips OPEN and starts failing fast instead of attempting real calls.
+    circuit_breaker_threshold: int = 3
+    # How long (seconds) the breaker stays OPEN before allowing one
+    # HALF_OPEN test request through to check if Ollama has recovered.
+    circuit_breaker_reset: int = 30
+
     # Tells pydantic-settings to also read from a .env file in the repo
     # root, in addition to real environment variables (which always win).
     # populate_by_name lets fields still be set by their Python name

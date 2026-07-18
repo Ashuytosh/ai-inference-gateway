@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 
 from app.config import settings
 from app.core.dependencies import get_llm_service
-from app.models.responses import HealthResponse
+from app.models.responses import CircuitBreakerStatus, HealthResponse
 from app.services.llm_service import OllamaService
 
 router = APIRouter(tags=["Health"])
@@ -34,14 +34,18 @@ async def health_check(
     uptime_seconds = time.time() - app_start_time
     ollama_connected = await service.health_check()
 
-    models_loaded = 0
+    loaded_model_names: list[str] = []
     if ollama_connected:
-        models_loaded = len(await service.get_loaded_models())
+        loaded_model_names = await service.get_loaded_models()
+
+    breaker_status = service.get_circuit_breaker_status()
 
     return HealthResponse(
         status="healthy" if ollama_connected else "unhealthy",
         ollama_connected=ollama_connected,
-        models_loaded=models_loaded,
+        models_loaded=len(loaded_model_names),
         uptime_seconds=round(uptime_seconds, 1),
         version=settings.app_version,
+        loaded_model_names=loaded_model_names,
+        circuit_breaker=CircuitBreakerStatus(**breaker_status),
     )

@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}AI Inference Gateway{% endblock %}
+
+{% block body %}
+<!-- Overall page shell: a fixed-height flex row so the sidebar and the
+     chat column both stretch to the full viewport height, with the
+     chat column owning its own internal scroll region. -->
+<div class="h-full flex overflow-hidden">
+
+    <!-- ============================== SIDEBAR ============================== -->
+    <!-- On desktop (lg+) this sits statically in the flex row. On mobile it
+         becomes a fixed off-canvas panel (see custom.css) toggled by the
+         menu button in the top bar; it starts hidden via -translate-x-full. -->
+    <aside id="sidebar"
+           class="w-72 bg-gray-900/80 backdrop-blur border-r border-gray-800
+                  flex flex-col h-full p-4 space-y-6 overflow-y-auto
+                  -translate-x-full lg:translate-x-0">
+
+        <!-- Logo and title -->
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-500
+                        rounded-lg flex items-center justify-center shrink-0">
+                <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+            </div>
+            <h1 class="text-lg font-semibold tracking-tight">AI Gateway</h1>
+        </div>
+
+        <!-- New Chat -->
+        <button id="new-chat-btn" type="button" class="w-full py-2.5 px-4 bg-gradient-to-r
+                from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500
+                rounded-xl text-sm font-medium transition-all duration-200
+                flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/50">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            New Chat
+        </button>
+
+        <!-- Model selector -->
+        <div class="space-y-2">
+            <label for="model-select" class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Model
+            </label>
+            <select id="model-select" class="w-full bg-gray-800 border border-gray-700
+                    rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500
+                    focus:border-transparent outline-none transition-all duration-200">
+                <option value="auto">🟢 Auto (Smart Route)</option>
+                <!-- Populated dynamically from /api/models by chat.js -->
+            </select>
+        </div>
+
+        <!-- Temperature -->
+        <div class="space-y-2">
+            <div class="flex justify-between items-center">
+                <label for="temp-slider" class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    Temperature
+                </label>
+                <span id="temp-value" class="text-xs text-indigo-400 font-mono">0.7</span>
+            </div>
+            <input type="range" id="temp-slider" min="0" max="2" step="0.1" value="0.7"
+                   class="w-full accent-indigo-500">
+            <div class="flex justify-between text-xs text-gray-500">
+                <span>Precise</span>
+                <span>Creative</span>
+            </div>
+        </div>
+
+        <!-- Max tokens -->
+        <div class="space-y-2">
+            <label for="max-tokens" class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Max Tokens
+            </label>
+            <input type="number" id="max-tokens" value="1024" min="1" max="4096"
+                   class="w-full bg-gray-800 border border-gray-700 rounded-lg
+                          px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500
+                          focus:border-transparent outline-none transition-all duration-200">
+        </div>
+
+        <!-- System prompt -->
+        <div class="space-y-2">
+            <label for="system-prompt" class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                System Prompt <span class="normal-case text-gray-600">(optional)</span>
+            </label>
+            <textarea id="system-prompt" rows="3" placeholder="e.g., You are a pirate..."
+                      class="w-full bg-gray-800 border border-gray-700 rounded-lg
+                             px-3 py-2 text-sm resize-none focus:ring-2
+                             focus:ring-indigo-500 focus:border-transparent outline-none
+                             transition-all duration-200 placeholder:text-gray-600"></textarea>
+        </div>
+
+        <!-- Output format -->
+        <div class="space-y-2">
+            <label for="output-format" class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Output Format
+            </label>
+            <select id="output-format" class="w-full bg-gray-800 border border-gray-700
+                    rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500
+                    focus:border-transparent outline-none transition-all duration-200">
+                <option value="text">Text (default)</option>
+                <option value="sentiment">Sentiment Analysis</option>
+                <option value="summary">Summary</option>
+                <option value="code_review">Code Review</option>
+                <option value="qa">Q&amp;A</option>
+                <option value="json">Custom JSON</option>
+            </select>
+        </div>
+
+        <!-- Bottom-anchored: links + connection status -->
+        <div class="mt-auto space-y-3 pt-4 border-t border-gray-800">
+            <a href="/api/analytics" target="_blank" rel="noopener"
+               class="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors duration-200">
+                <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+                View Analytics
+            </a>
+
+            <a href="/docs" target="_blank" rel="noopener"
+               class="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors duration-200">
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                API Documentation
+            </a>
+
+            <div id="connection-status" class="flex items-center gap-2 text-xs">
+                <div id="status-dot" class="w-2 h-2 rounded-full bg-gray-600"></div>
+                <span id="status-text" class="text-gray-400">Connecting...</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Mobile-only backdrop shown behind the sidebar when it's open, so
+         tapping outside the panel closes it. Hidden on desktop; toggled
+         alongside the sidebar by chat.js. -->
+    <div id="sidebar-backdrop" class="hidden fixed inset-0 bg-black/50 z-40 lg:hidden"></div>
+
+    <!-- ============================== MAIN CHAT AREA ============================== -->
+    <main class="flex-1 flex flex-col h-full min-w-0">
+
+        <!-- Top bar -->
+        <header class="h-14 border-b border-gray-800 flex items-center px-4 md:px-6
+                       bg-gray-900/50 backdrop-blur-sm shrink-0">
+            <button id="menu-toggle" type="button" class="lg:hidden mr-4 text-gray-400 hover:text-gray-100 transition-colors">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+            </button>
+            <span class="text-sm font-medium text-gray-300">
+                AI Inference Gateway
+            </span>
+            <span class="ml-auto text-xs text-gray-500 font-mono" id="active-model-display">
+                Model: Auto
+            </span>
+        </header>
+
+        <!-- Messages (scrollable) -->
+        <div id="messages-container" class="flex-1 overflow-y-auto px-4 md:px-8
+                                            lg:px-16 py-6 space-y-6">
+
+            <div id="empty-state" class="flex flex-col items-center justify-center
+                                         h-full text-center">
+                <div class="w-16 h-16 bg-gradient-to-br from-indigo-500/20 to-blue-500/20
+                            rounded-2xl flex items-center justify-center mb-4">
+                    <i data-lucide="message-square" class="w-8 h-8 text-indigo-400"></i>
+                </div>
+                <h2 class="text-lg font-medium text-gray-300 mb-2">
+                    Start a conversation
+                </h2>
+                <p class="text-sm text-gray-500 max-w-md">
+                    Send a message and the gateway will intelligently route it
+                    to the best model. Or select a specific model from the sidebar.
+                </p>
+            </div>
+
+            <!-- Messages inserted here dynamically by chat.js -->
+        </div>
+
+        <!-- Input area (fixed bottom) -->
+        <div class="border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm
+                    px-4 md:px-8 lg:px-16 py-4 shrink-0">
+
+            <div class="max-w-3xl mx-auto">
+                <div class="flex gap-3 items-end">
+                    <div class="flex-1 relative">
+                        <textarea id="message-input" rows="1"
+                                  placeholder="Send a message..."
+                                  class="w-full bg-gray-800 border border-gray-700 rounded-xl
+                                         px-4 py-3 pr-4 text-sm resize-none
+                                         focus:ring-2 focus:ring-indigo-500
+                                         focus:border-transparent outline-none
+                                         max-h-40 overflow-y-auto placeholder:text-gray-600"></textarea>
+                    </div>
+                    <button id="send-btn" type="button"
+                            class="w-10 h-10 bg-gradient-to-r from-indigo-600 to-blue-600
+                                   hover:from-indigo-500 hover:to-blue-500
+                                   rounded-xl flex items-center justify-center
+                                   transition-all duration-200 disabled:opacity-50
+                                   disabled:cursor-not-allowed flex-shrink-0 shadow-lg shadow-indigo-950/50">
+                        <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                    <span id="input-model-indicator">Model: Auto</span>
+                    <span>&middot;</span>
+                    <span id="input-temp-indicator">Temp: 0.7</span>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/chat.js"></script>
+{% endblock %}

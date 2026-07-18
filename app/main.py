@@ -19,15 +19,27 @@ from app.config import settings
 from app.core.dependencies import get_llm_service
 from app.core.exceptions import (
     AppException,
+    CircuitBreakerOpenError,
+    DEGRADATION_MESSAGES,
     LLMTimeoutError,
     ModelNotFoundError,
     OllamaConnectionError,
     OutputParsingError,
     TokenLimitExceeded,
 )
+from app.core.logging_config import setup_logging
 from app.core.middleware import RequestLoggingMiddleware
 from app.models.responses import ErrorResponse
-from app.routers import chat, health, models
+from app.routers import analytics, chat, health, models
+
+# Configure structlog before literally anything else runs -- every other
+# module in this app does `logger = structlog.get_logger()` at import
+# time, and while that call itself is safe to make before configuration
+# (it returns a lazy proxy), we want the *first log line ever emitted*
+# to already use the real JSON configuration rather than structlog's
+# unconfigured defaults. Calling this first, before even constructing
+# the FastAPI app, guarantees that.
+setup_logging(settings.log_level)
 
 logger = structlog.get_logger()
 
@@ -63,6 +75,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(models.router)
+app.include_router(analytics.router)
 
 
 # --- Static files & templates -------------------------------------------
@@ -81,11 +94,29 @@ templates = Jinja2Templates(directory="templates")
 # the base class) keeps things explicit and matches the spec's
 # per-exception table.
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+    """
+    Substitutes friendlier copy for the two exception types that mean
+    "Ollama itself is unreachable" -- OllamaConnectionError (a live
+    connection attempt failed) and CircuitBreakerOpenError (we didn't
+    even attempt one, because recent failures already told us it's
+    down). A caller shouldn't have to parse "OllamaConnectionError:
+    Cannot connect to Ollama at http://localhost:11434" to understand
+    what happened; DEGRADATION_MESSAGES["ollama_down"] says the same
+    thing in plain language. The original technical message is preserved
+    in `detail` for anyone who does want it.
+    """
+    message = exc.message
+    detail = exc.detail
+    if isinstance(exc, (OllamaConnectionError, CircuitBreakerOpenError)):
+        degradation = DEGRADATION_MESSAGES["ollama_down"]
+        detail = exc.message if detail is None else f"{exc.message} ({detail})"
+        message = degradation["response"]
+
     body = ErrorResponse(
         error=type(exc).__name__,
-        message=exc.message,
+        message=message,
         status_code=exc.status_code,
-        detail=exc.detail,
+        detail=detail,
     )
     return JSONResponse(status_code=exc.status_code, content=body.model_dump())
 
@@ -96,6 +127,7 @@ for exc_type in (
     LLMTimeoutError,
     OutputParsingError,
     TokenLimitExceeded,
+    CircuitBreakerOpenError,
 ):
     app.exception_handler(exc_type)(app_exception_handler)
 
@@ -158,9 +190,10 @@ async def on_shutdown() -> None:
 
 # --- Root route -------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-async def root() -> str:
+async def root(request: Request) -> HTMLResponse:
     """
-    Minimal placeholder landing page. The real ChatGPT-style UI (see
-    CLAUDE.md) is built in Phase 7 using templates/chat.html.
+    Serves the chat UI: a Jinja2-rendered, Tailwind-styled ChatGPT-style
+    interface (templates/chat.html) that talks to this app's own JSON
+    and streaming endpoints from the browser.
     """
-    return "AI Inference Gateway is running. API docs at /docs"
+    return templates.TemplateResponse(request, "chat.html")

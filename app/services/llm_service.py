@@ -34,12 +34,14 @@ import httpx
 import structlog
 
 from app.core.exceptions import (
+    CircuitBreakerOpenError,
     LLMTimeoutError,
     ModelNotFoundError,
     OllamaConnectionError,
     OutputParsingError,
 )
 from app.models.responses import ModelInfo
+from app.services.router_service import SMALL_MODELS
 
 logger = structlog.get_logger()
 
@@ -285,6 +287,89 @@ def with_retry_stream(
 
 
 # ---------------------------------------------------------------------------
+# Circuit breaker
+# ---------------------------------------------------------------------------
+class OllamaCircuitBreaker:
+    """
+    Circuit breaker pattern (same name/idea as an electrical circuit
+    breaker): when Ollama fails repeatedly, stop sending it requests for
+    a cooldown period instead of continuing to waste time on requests
+    that will almost certainly fail too.
+
+    Without this, if Ollama crashes, every request still pays the *full*
+    cost of finding that out: with_retry's three attempts each waiting up
+    to settings.request_timeout seconds, plus backoff sleeps between them
+    -- tens of seconds per request, repeated for every request that comes
+    in while Ollama is down. With this breaker, after
+    failure_threshold consecutive failures, every subsequent request
+    fails instantly (see CircuitBreakerOpenError) until reset_timeout
+    seconds have passed, at which point exactly one request is let
+    through as a health probe.
+
+    Three states:
+    - CLOSED: normal operation. Requests go through; failures are
+      counted; failure_threshold consecutive failures trips it OPEN.
+    - OPEN: Ollama is presumed down. Requests are rejected immediately
+      (see can_proceed) without even attempting the network call, until
+      reset_timeout seconds have elapsed since the last failure.
+    - HALF_OPEN: the cooldown has elapsed. Exactly one request is allowed
+      through as a test -- if it succeeds, record_success() resets to
+      CLOSED; if it fails, record_failure() flips straight back to OPEN
+      (and the cooldown timer restarts).
+    """
+
+    def __init__(self, failure_threshold: int = 3, reset_timeout: int = 30) -> None:
+        self.failure_threshold = failure_threshold
+        self.reset_timeout = reset_timeout
+        self.failure_count = 0
+        self.state = "CLOSED"
+        self.last_failure_time = 0.0
+
+    def record_success(self) -> None:
+        """A successful call always fully resets the breaker -- including
+        collapsing an accumulated (but sub-threshold) failure count back
+        to zero, since those earlier failures are no longer meaningful
+        evidence of an ongoing outage once a request has gotten through."""
+        self.failure_count = 0
+        self.state = "CLOSED"
+
+    def record_failure(self) -> None:
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+        if self.failure_count >= self.failure_threshold:
+            self.state = "OPEN"
+
+    def can_proceed(self) -> tuple[bool, str]:
+        """
+        Called before every real Ollama call (see OllamaService._post_chat
+        and chat_stream). Returns (allowed, state_label) -- the label is
+        purely descriptive, used in log lines and in the
+        CircuitBreakerOpenError message, not branched on by callers.
+        """
+        if self.state == "CLOSED":
+            return True, "closed"
+
+        if self.state == "OPEN":
+            elapsed = time.time() - self.last_failure_time
+            if elapsed >= self.reset_timeout:
+                # Cooldown's up -- let exactly one request through as a
+                # probe rather than snapping straight back to full
+                # traffic, so a still-broken Ollama doesn't immediately
+                # get hit with every queued-up request at once.
+                self.state = "HALF_OPEN"
+                return True, "half_open"
+            return False, f"open (retry in {round(self.reset_timeout - elapsed)}s)"
+
+        # HALF_OPEN: the one probe request in flight is allowed; any
+        # concurrent request arriving while that probe is still pending
+        # is also let through here since this method has no way to know
+        # the probe hasn't resolved yet (no per-request locking) -- an
+        # acceptable simplification for a single-process, mostly-serial
+        # local gateway.
+        return True, "half_open"
+
+
+# ---------------------------------------------------------------------------
 # OllamaService
 # ---------------------------------------------------------------------------
 class OllamaService:
@@ -305,21 +390,79 @@ class OllamaService:
         # redundant /api/ps calls if they only care about the last model.
         self._loaded_model: str | None = None
 
+        # One breaker per service instance -- meaningless on its own, it
+        # only makes sense paired with the specific Ollama connection
+        # it's protecting. Local import of settings to dodge a
+        # config<->service import cycle, same reasoning as
+        # preload_model's local import below.
+        from app.config import settings
+
+        self._circuit_breaker = OllamaCircuitBreaker(
+            failure_threshold=settings.circuit_breaker_threshold,
+            reset_timeout=settings.circuit_breaker_reset,
+        )
+
+    def get_circuit_breaker_status(self) -> dict:
+        """Used by GET /health (see app/routers/health.py) to expose
+        breaker state without leaking the OllamaCircuitBreaker object
+        itself outside this module."""
+        return {
+            "state": self._circuit_breaker.state.lower(),
+            "failure_count": self._circuit_breaker.failure_count,
+        }
+
     # -- Health / discovery -------------------------------------------------
+    #
+    # These three methods (health_check, list_models, get_loaded_models)
+    # are also breaker-checked, not just chat()/chat_stream() -- because
+    # in this app's actual request flow, get_loaded_models()/list_models()
+    # are what chat.py's routing step (_classify_and_route) calls
+    # *first*, before ever reaching a chat() call. Without breaker
+    # coverage here too, a full Ollama outage would always fail at this
+    # earlier, un-retried step -- meaning the breaker would never trip,
+    # /health's circuit_breaker field would never reflect the outage, and
+    # every single request would separately pay the (small but real) cost
+    # of attempting a doomed connection, rather than fast-failing once
+    # the outage is established.
     async def health_check(self) -> bool:
-        """Used by GET /health -- True only if Ollama answers at all."""
-        try:
-            response = await self._client.get("/api/tags")
-            return response.status_code == 200
-        except (httpx.ConnectError, httpx.HTTPError):
+        """
+        Used by GET /health -- True only if Ollama answers at all.
+        Preserves its "never raises" contract even when the breaker is
+        OPEN: it just returns False immediately without attempting the
+        network call, same end result (unhealthy) as any other failure
+        mode this method already reports via a plain bool.
+        """
+        allowed, _ = self._circuit_breaker.can_proceed()
+        if not allowed:
             return False
 
+        try:
+            response = await self._client.get("/api/tags")
+            healthy = response.status_code == 200
+        except (httpx.ConnectError, httpx.HTTPError):
+            self._circuit_breaker.record_failure()
+            return False
+
+        if healthy:
+            self._circuit_breaker.record_success()
+        else:
+            self._circuit_breaker.record_failure()
+        return healthy
+
     async def list_models(self) -> list[ModelInfo]:
+        allowed, state_label = self._circuit_breaker.can_proceed()
+        if not allowed:
+            raise CircuitBreakerOpenError(
+                f"Ollama is temporarily unavailable ({state_label})",
+                detail=f"circuit_breaker_state={self._circuit_breaker.state}",
+            )
+
         try:
             response = await self._client.get("/api/tags")
             response.raise_for_status()
             data = response.json()
         except httpx.ConnectError as exc:
+            self._circuit_breaker.record_failure()
             raise OllamaConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}"
             ) from exc
@@ -345,6 +488,7 @@ class OllamaService:
                     loaded=name in loaded_names,
                 )
             )
+        self._circuit_breaker.record_success()
         return models
 
     async def get_loaded_models(self) -> list[str]:
@@ -355,14 +499,23 @@ class OllamaService:
         also evicts models after `keep_alive` expires, which we wouldn't
         otherwise know about).
         """
+        allowed, state_label = self._circuit_breaker.can_proceed()
+        if not allowed:
+            raise CircuitBreakerOpenError(
+                f"Ollama is temporarily unavailable ({state_label})",
+                detail=f"circuit_breaker_state={self._circuit_breaker.state}",
+            )
+
         try:
             response = await self._client.get("/api/ps")
             response.raise_for_status()
             data = response.json()
         except httpx.ConnectError as exc:
+            self._circuit_breaker.record_failure()
             raise OllamaConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}"
             ) from exc
+        self._circuit_breaker.record_success()
         return [entry["name"] for entry in data.get("models", [])]
 
     async def get_model_status(self, model_name: str) -> ModelInfo | None:
@@ -370,6 +523,35 @@ class OllamaService:
             if model.name == model_name:
                 return model
         return None
+
+    def estimate_tokens(self, text: str) -> int:
+        """
+        Rough token-count estimate: about 1 token per 4 characters for
+        English text with typical LLM tokenizers (roughly true for BPE
+        tokenizers used by most open models). This is deliberately not
+        exact -- pulling in a real tokenizer per-model would mean
+        downloading/maintaining a vocab file for every model in
+        CAPABILITY_MAP just to answer "is this prompt too long?", which
+        is overkill when we only need a ballpark figure to decide
+        whether to warn or truncate (see chat.py's context check).
+        """
+        return len(text) // 4
+
+    async def get_vram_status(self) -> dict:
+        """
+        Reports which models are currently resident in VRAM and which of
+        those are "small" enough to coexist with a 7B model without
+        forcing an eviction (see SMALL_MODELS) -- used to build an
+        at-a-glance picture of current VRAM pressure, e.g. for a future
+        admin/debug endpoint or for routing decisions that want to know
+        more than just "is my target model loaded".
+        """
+        loaded = await self.get_loaded_models()
+        return {
+            "loaded_models": loaded,
+            "last_used_model": self._loaded_model,
+            "can_coexist": [m for m in loaded if m in SMALL_MODELS],
+        }
 
     # -- Generation -----------------------------------------------------
     @with_retry
@@ -438,11 +620,27 @@ class OllamaService:
                 "num_predict": max_tokens,
             },
         }
+
+        # Same breaker check as _post_chat -- duplicated here (rather
+        # than shared) because chat_stream can't go through _post_chat
+        # at all: streaming needs the response body opened as a stream
+        # (self._client.stream(...)), not buffered into one JSON blob.
+        # This mirrors the pre-existing duplication of error-translation
+        # logic between this method and _post_chat.
+        allowed, state_label = self._circuit_breaker.can_proceed()
+        if not allowed:
+            raise CircuitBreakerOpenError(
+                f"Ollama is temporarily unavailable ({state_label})",
+                detail=f"circuit_breaker_state={self._circuit_breaker.state}",
+            )
+
         try:
             async with self._client.stream(
                 "POST", "/api/chat", json=payload
             ) as response:
                 if response.status_code == 404:
+                    # Ollama responded -- it's up, just doesn't have this
+                    # model. Not a breaker failure (see _post_chat).
                     raise ModelNotFoundError(f"Model '{model}' not found")
                 response.raise_for_status()
 
@@ -458,6 +656,7 @@ class OllamaService:
 
                     if chunk.get("done"):
                         self._loaded_model = model
+                        self._circuit_breaker.record_success()
                         yield {
                             "prompt_tokens": chunk.get("prompt_eval_count", 0),
                             "completion_tokens": chunk.get("eval_count", 0),
@@ -467,10 +666,12 @@ class OllamaService:
                     else:
                         yield chunk.get("message", {}).get("content", "")
         except httpx.ConnectError as exc:
+            self._circuit_breaker.record_failure()
             raise OllamaConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}"
             ) from exc
         except httpx.ReadTimeout as exc:
+            self._circuit_breaker.record_failure()
             raise LLMTimeoutError("Model took too long to respond") from exc
 
     async def preload_model(self, model_name: str) -> bool:
@@ -515,26 +716,53 @@ class OllamaService:
         Shared POST /api/chat + error-translation logic used by both
         chat() and preload_model() (chat_stream() has its own streaming
         variant above since it can't buffer the whole response first).
+
+        Circuit breaker check happens first, before the network call is
+        even attempted -- see OllamaCircuitBreaker's docstring for why
+        that's the whole point (fail fast instead of burning a real
+        timeout on a backend already known to be down).
+        record_success()/record_failure() bracket the call: success only
+        on a fully clean response (past status-code and JSON-parsing
+        checks), failure only for the *connection-level* problems
+        (ConnectError, ReadTimeout, a non-2xx status from raise_for_status)
+        -- NOT for a 404 model-not-found, since that means Ollama itself
+        answered fine, it just doesn't have the requested model. A 404
+        is a client-request problem, not evidence Ollama is down, so it
+        shouldn't count toward tripping the breaker.
         """
+        allowed, state_label = self._circuit_breaker.can_proceed()
+        if not allowed:
+            raise CircuitBreakerOpenError(
+                f"Ollama is temporarily unavailable ({state_label})",
+                detail=f"circuit_breaker_state={self._circuit_breaker.state}",
+            )
+
         try:
             response = await self._client.post("/api/chat", json=payload)
         except httpx.ConnectError as exc:
+            self._circuit_breaker.record_failure()
             raise OllamaConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}"
             ) from exc
         except httpx.ReadTimeout as exc:
+            self._circuit_breaker.record_failure()
             raise LLMTimeoutError("Model took too long to respond") from exc
 
         if response.status_code == 404:
+            # Ollama responded -- it's up. Not a breaker failure.
             raise ModelNotFoundError(f"Model '{payload['model']}' not found")
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
+            self._circuit_breaker.record_failure()
             raise OllamaConnectionError(
                 f"Ollama returned an error: {response.status_code}"
             ) from exc
 
         try:
-            return response.json()
+            data = response.json()
         except json.JSONDecodeError as exc:
             raise OutputParsingError("Invalid response from Ollama") from exc
+
+        self._circuit_breaker.record_success()
+        return data

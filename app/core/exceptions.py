@@ -61,3 +61,52 @@ class TokenLimitExceeded(AppException):
     """Raised when a prompt exceeds the target model's context/token limit."""
 
     status_code = 400
+
+
+class CircuitBreakerOpenError(AppException):
+    """
+    Raised by OllamaService when the circuit breaker (see
+    OllamaCircuitBreaker in app/services/llm_service.py) has tripped
+    OPEN after repeated Ollama connection failures, and the cooldown
+    period hasn't elapsed yet. Raising this immediately -- instead of
+    attempting the network call and waiting for it to time out -- is the
+    entire point of the circuit breaker pattern: fail fast instead of
+    burning 30+ seconds per request on a backend already known to be down.
+    """
+
+    status_code = 503
+
+
+# ---------------------------------------------------------------------------
+# Degradation messages
+# ---------------------------------------------------------------------------
+# Friendlier, user-facing copy substituted in for the raw technical
+# exception message in specific known failure modes (see main.py's
+# app_exception_handler and dependencies.py's check_rate_limit) -- a
+# caller-facing app shouldn't have to show "OllamaConnectionError: Cannot
+# connect to Ollama at http://localhost:11434" when "the AI model server
+# is temporarily unavailable" says the same thing without leaking
+# internal wiring. The raw technical message still goes into the
+# response's `detail` field for anyone who does want it (debugging,
+# support tickets), it's just no longer the headline `message`.
+DEGRADATION_MESSAGES: dict[str, dict[str, str | None]] = {
+    "ollama_down": {
+        "response": (
+            "I'm currently unable to process your request because the "
+            "AI model server is temporarily unavailable. Please try "
+            "again in a few moments."
+        ),
+        "suggestion": "You can check the server status at /health",
+    },
+    "rate_limited": {
+        "response": "You've sent too many requests. Please wait a moment before trying again.",
+        "suggestion": "Rate limit resets in {reset_seconds} seconds",
+    },
+    "model_overloaded": {
+        "response": (
+            "The requested model is currently busy. Your request has "
+            "been routed to an alternative model."
+        ),
+        "suggestion": None,
+    },
+}

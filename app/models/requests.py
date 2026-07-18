@@ -9,6 +9,8 @@ before our route handler code ever runs.
 
 from pydantic import BaseModel, Field
 
+from app.models.output_formats import OutputFormat
+
 
 class ChatRequest(BaseModel):
     """Body for POST /api/chat and POST /api/chat/stream."""
@@ -36,3 +38,20 @@ class ChatRequest(BaseModel):
     stream: bool = Field(default=False)
 
     system_prompt: str | None = Field(default=None, max_length=2000)
+
+    # TEXT (default) returns free-form text with parsed=None; any other
+    # value asks OutputParser (app/services/output_parser.py) to force
+    # and validate a specific JSON shape from the model.
+    output_format: OutputFormat = Field(
+        default=OutputFormat.TEXT,
+        description="Desired output format. TEXT returns free-form text, others return structured JSON.",
+    )
+
+    # Only meaningful when output_format is JSON -- describes the custom
+    # shape the caller wants (e.g. as a JSON-Schema-ish string), since
+    # there's no named Pydantic model to fall back on for a caller-defined format.
+    schema_hint: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="JSON schema hint when output_format is 'json'. Describes the shape you want.",
+    )

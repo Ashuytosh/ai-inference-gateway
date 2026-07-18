@@ -1,0 +1,121 @@
+/* Custom CSS for things Tailwind's utility classes can't express on
+   their own: scrollbar theming, keyframe animations, and the mobile
+   sidebar slide-in behavior. Everything else lives inline as Tailwind
+   classes in the templates. */
+
+/* Slim, dark scrollbar for the message list (WebKit browsers). Firefox
+   falls back to its default thin scrollbar via `scrollbar-width` below. */
+#messages-container {
+    scrollbar-width: thin;
+    scrollbar-color: #374151 transparent;
+    scroll-behavior: smooth;
+}
+#messages-container::-webkit-scrollbar {
+    width: 6px;
+}
+#messages-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+#messages-container::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 3px;
+}
+#messages-container::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+}
+
+/* Blinking cursor shown at the end of the assistant's message while a
+   token stream is still in flight -- gives the "typing" feel. */
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+.animate-blink {
+    animation: blink 1s step-end infinite;
+}
+
+/* Smooths the height changes driven by the auto-resize-textarea JS
+   listener so growing/shrinking doesn't feel like a hard jump cut. */
+#message-input {
+    transition: height 0.1s ease;
+}
+
+/* Code blocks and inline code inside rendered assistant messages
+   (produced by renderMarkdown() in chat.js). */
+#messages-container pre {
+    background: #1a1a2e;
+    border: 1px solid #374151;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+#messages-container code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+}
+
+#messages-container pre code {
+    background: transparent;
+    padding: 0;
+}
+
+/* Inline `code` spans outside of <pre> blocks */
+#messages-container :not(pre) > code {
+    background: #1f2937;
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+}
+
+/* Range slider (temperature control) -- Tailwind's `accent-indigo-500`
+   handles Chromium/Firefox coloring, but the thumb/track shape still
+   needs manual WebKit styling to look intentional rather than default. */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: #374151;
+    outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #6366f1;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #6366f1;
+    cursor: pointer;
+    border: none;
+}
+
+/* Mobile sidebar: below the lg breakpoint the sidebar becomes an
+   off-canvas panel that slides in over the chat area instead of
+   permanently occupying layout width. Tailwind's `lg:static` etc.
+   handle the desktop side; this covers the slide transform itself. */
+@media (max-width: 1023px) {
+    #sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 50;
+        transition: transform 0.3s ease;
+    }
+    #sidebar.-translate-x-full {
+        transform: translateX(-100%);
+    }
+}
