@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
+from app.core.dependencies import get_llm_service
 from app.core.exceptions import (
     AppException,
     LLMTimeoutError,
@@ -119,11 +120,39 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 # --- Lifecycle hooks -------------------------------------------------------
 @app.on_event("startup")
 async def on_startup() -> None:
-    logger.info("AI Inference Gateway started")
+    """
+    Runs once, before the server starts accepting requests. We use this
+    to "warm up" the gateway: confirm Ollama is actually reachable, and
+    if so, force the default model into VRAM ahead of time so the very
+    first real chat request isn't the one paying the multi-second model
+    load cost.
+    """
+    service = await get_llm_service()
+    if await service.health_check():
+        if settings.preload_model_on_startup:
+            await service.preload_model(settings.default_model)
+            logger.info(
+                "AI Inference Gateway started",
+                ollama_connected=True,
+                preloaded_model=settings.default_model,
+            )
+        else:
+            logger.info("AI Inference Gateway started", ollama_connected=True)
+    else:
+        # Deliberately not raising here -- a gateway that can't reach
+        # Ollama yet should still boot and serve /health as "unhealthy"
+        # rather than crash-looping (Ollama might just not be started
+        # yet, or the operator is troubleshooting).
+        logger.warning(
+            "AI Inference Gateway started in degraded mode: Ollama not available",
+            ollama_connected=False,
+        )
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
+    service = await get_llm_service()
+    await service.close()
     logger.info("AI Inference Gateway shutting down")
 
 

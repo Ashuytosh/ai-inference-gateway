@@ -10,6 +10,7 @@ scattered through the code. This gives us:
     touching the real .env file
 """
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,8 +30,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     # Fallback model used when the query router (Phase 5) hasn't picked
-    # a specific one, or when no model is specified in the request.
-    default_model: str = "gemma3"
+    # a specific one, or when no model is specified in the request. Must
+    # be an exact Ollama tag (e.g. "gemma3:4b"), not a bare family name,
+    # or lookups against locally pulled models will never match.
+    default_model: str = "gemma3:4b"
     default_temperature: float = 0.7
     default_max_tokens: int = 1024
 
@@ -40,9 +43,32 @@ class Settings(BaseSettings):
     # LLMTimeoutError (Phase 2).
     request_timeout: int = 30
 
+    # --- Phase 2: response cache (see ResponseCache in llm_service.py) ---
+    cache_max_size: int = 100
+    cache_ttl_seconds: int = 600
+    # Only responses generated below this temperature get cached -- high
+    # temperature is intentionally non-deterministic, so caching it would
+    # just serve stale/wrong-flavored answers for what should be a fresh
+    # roll each time.
+    cache_temperature_threshold: float = 0.3
+
+    # --- Phase 2: startup warm-up ---
+    preload_model_on_startup: bool = True
+
+    # How long Ollama keeps a model resident in VRAM after last use.
+    # Reuses the existing OLLAMA_KEEP_ALIVE env var (rather than adding a
+    # near-duplicate KEEP_ALIVE var) since that value already means the
+    # same thing wherever it's set.
+    keep_alive: str = Field(default="30m", alias="OLLAMA_KEEP_ALIVE")
+
     # Tells pydantic-settings to also read from a .env file in the repo
     # root, in addition to real environment variables (which always win).
-    model_config = SettingsConfigDict(env_file=".env")
+    # populate_by_name lets fields still be set by their Python name
+    # (e.g. Settings(keep_alive=...) in tests) even though keep_alive
+    # also has an explicit env alias.
+    model_config = SettingsConfigDict(
+        env_file=".env", populate_by_name=True, extra="ignore"
+    )
 
 
 # A single shared instance, imported everywhere else in the app

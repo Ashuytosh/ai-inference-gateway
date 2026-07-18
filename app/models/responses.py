@@ -34,6 +34,11 @@ class ResponseMetadata(BaseModel):
     # serialization simple and unambiguous across timezones.
     timestamp: str
 
+    # True when this response was served from ResponseCache instead of
+    # calling Ollama -- lets the UI/client see why latency_ms is
+    # suspiciously low for what should be an LLM call.
+    cached: bool = False
+
 
 class ChatResponse(BaseModel):
     """Body returned by POST /api/chat."""

@@ -48,3 +48,24 @@ This project follows phase-wise specs-driven development. Each phase has its own
 - Response with full metadata → streamed back to UI
 
 
+
+## Optimization Strategy
+- Preload default model on FastAPI startup (warm VRAM)
+- Track currently loaded model to avoid unnecessary swaps
+- gemma3:4b stays always loaded alongside one 7B model
+- Heuristic query classifier first, LLM fallback only if uncertain
+- LRU response cache for low-temperature repeated queries
+- Context window tracking with auto-summarization at 80% capacity
+- Custom Modelfiles for task-specific tuning
+
+## Available Models
+- gemma3:4b — fast, simple tasks (3.3GB)
+- phi4-mini — logic, math, reasoning (2.5GB)
+- qwen2.5:7b — complex reasoning, detailed analysis (4.7GB)
+- qwen2.5-coder:7b — code, debugging, technical (4.7GB)
+- mistral:7b — creative writing, conversation (4.4GB)
+
+## Model Selection Modes
+- Auto mode: gateway classifies query and picks best model
+- Manual mode: user selects specific model from dropdown, skip classifier
+
