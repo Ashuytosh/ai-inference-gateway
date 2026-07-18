@@ -13,6 +13,7 @@ until Phase 5 / Phase 3.
 
 from app.config import settings
 from app.services.llm_service import OllamaService, ResponseCache
+from app.services.prompt_service import PromptService
 
 # Module-level singleton slots. FastAPI calls a dependency function once
 # per request by default, which would create a brand new httpx client
@@ -21,6 +22,7 @@ from app.services.llm_service import OllamaService, ResponseCache
 # true singleton shared across the whole app's lifetime instead.
 _llm_service: OllamaService | None = None
 _cache: ResponseCache | None = None
+_prompt_service: PromptService | None = None
 
 
 async def get_llm_service() -> OllamaService:
@@ -48,6 +50,8 @@ def get_router_service():
     return None
 
 
-def get_prompt_service():
-    """Returns prompt service instance. Placeholder for Phase 3."""
-    return None
+async def get_prompt_service() -> PromptService:
+    global _prompt_service
+    if _prompt_service is None:
+        _prompt_service = PromptService()
+    return _prompt_service

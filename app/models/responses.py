@@ -39,6 +39,12 @@ class ResponseMetadata(BaseModel):
     # suspiciously low for what should be an LLM call.
     cached: bool = False
 
+    # Which prompt-engineering strategy PromptService applied: "direct",
+    # "chain-of-thought", "creative-enhancement", or "technical-precision".
+    # None when the caller supplied their own system_prompt, since that
+    # overrides our auto-strategy entirely (see PromptService.build_messages).
+    prompt_strategy: str | None = None
+
 
 class ChatResponse(BaseModel):
     """Body returned by POST /api/chat."""
