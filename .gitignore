@@ -7,3 +7,5 @@ venv/
 dist/
 build/
 .pytest_cache/
+.vscode/
+screenshots/*.png

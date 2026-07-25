@@ -24,6 +24,8 @@ build_messages() is the single entry point that ties 1-3 together into
 the exact `messages` list Ollama's /api/chat expects.
 """
 
+from datetime import datetime
+
 import structlog
 
 from app.models.enums import QueryType
@@ -218,6 +220,14 @@ class PromptService:
         a chain-of-thought instruction block would fight that framing).
         """
         system_prompt = self.get_system_prompt(query_type, custom_system_prompt)
+
+        # Local LLMs have no internet access and only know their training
+        # cutoff date. Injecting the current timestamp grounds their
+        # responses in the correct time context.
+        system_prompt = (
+            f"Current date and time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}. "
+            f"{system_prompt}"
+        )
 
         if custom_system_prompt:
             enhanced_prompt = prompt

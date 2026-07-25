@@ -1,24 +1,3 @@
-# Phase 8 — API Documentation, README & Final Polish
-
-## Goal
-Create professional documentation that makes this project portfolio-worthy.
-After this phase, anyone can clone the repo, understand the architecture,
-set it up, and run it. The README alone should impress an interviewer
-before they even look at the code.
-
-IMPORTANT: This phase is documentation-only. No code changes to the
-application itself. Focus on making this project look like a real
-open-source product.
-
----
-
-## 1. README.md (Root of project)
-
-Write a comprehensive, professional README with these sections:
-
-### Header Section
-
-```markdown
 # 🚀 AI Inference Gateway
 
 An intelligent multi-model LLM gateway that classifies queries, routes
@@ -31,41 +10,40 @@ running locally on consumer hardware.
 ![Ollama](https://img.shields.io/badge/Ollama-Local_LLMs-black?logo=ollama&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC?logo=tailwindcss&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
-```
 
-### Features Section
+---
 
-List all major features with brief one-line descriptions:
+## Features
 
-- Smart Query Routing — Two-tier heuristic + LLM classifier that
+- **Smart Query Routing** — Two-tier heuristic + LLM classifier that
   routes queries to the optimal model based on type (simple, complex,
   creative, technical) in under 1ms for 80% of queries
-- Multi-Model Support — 5 local models via Ollama with automatic
+- **Multi-Model Support** — 5 local models via Ollama with automatic
   selection or manual override through a dropdown UI
-- VRAM-Aware Optimization — Tracks loaded models to avoid unnecessary
+- **VRAM-Aware Optimization** — Tracks loaded models to avoid unnecessary
   4-7 second swap overhead on 8GB VRAM GPUs
-- Streaming Responses — ChatGPT-style token-by-token streaming via
+- **Streaming Responses** — ChatGPT-style token-by-token streaming via
   Server-Sent Events with blinking cursor animation
-- Prompt Engineering Pipeline — Auto-applies chain-of-thought,
+- **Prompt Engineering Pipeline** — Auto-applies chain-of-thought,
   creative enhancement, or technical precision prompting based on
   query classification
-- Structured Output Parsing — Force LLMs to return validated JSON
+- **Structured Output Parsing** — Force LLMs to return validated JSON
   (sentiment analysis, summaries, code reviews, Q&A, custom schemas)
   with automatic retry on malformed output
-- Production Reliability — Circuit breaker, exponential backoff retry,
+- **Production Reliability** — Circuit breaker, exponential backoff retry,
   fallback chains, rate limiting, graceful degradation
-- Full Observability — Structured JSON logging, request tracing with
+- **Full Observability** — Structured JSON logging, request tracing with
   UUID, analytics dashboard with p50/p95/p99 latencies, per-model
   usage breakdown
-- Beautiful Dark UI — ChatGPT-like chat interface with model selector,
+- **Beautiful Dark UI** — ChatGPT-like chat interface with model selector,
   temperature slider, system prompt customization, metadata badges,
   and mobile responsiveness
-- Zero Cost — Runs entirely on local hardware using open-source models,
+- **Zero Cost** — Runs entirely on local hardware using open-source models,
   no API keys or cloud services required
 
-### Architecture Section
+---
 
-Include the full architecture diagram as a text/ASCII diagram:
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -128,9 +106,10 @@ Include the full architecture diagram as a text/ASCII diagram:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Tech Stack Section
+---
 
-```markdown
+## Tech Stack
+
 | Layer        | Technology                              |
 |-------------|------------------------------------------|
 | Backend     | Python 3.12, FastAPI, Uvicorn            |
@@ -140,11 +119,11 @@ Include the full architecture diagram as a text/ASCII diagram:
 | HTTP Client | httpx (async)                            |
 | Logging     | structlog (JSON)                         |
 | Config      | pydantic-settings, python-dotenv         |
-```
 
-### Models Section
+---
 
-```markdown
+## Models
+
 | Model              | Size   | Role                        | Speed  |
 |-------------------|--------|-----------------------------|--------|
 | gemma3:4b         | 3.3 GB | Simple queries, quick tasks | Fast   |
@@ -152,36 +131,36 @@ Include the full architecture diagram as a text/ASCII diagram:
 | qwen2.5:7b        | 4.7 GB | Complex analysis, detail    | Medium |
 | qwen2.5-coder:7b  | 4.7 GB | Code, debugging, technical  | Medium |
 | mistral:7b        | 4.4 GB | Creative writing, stories   | Medium |
-```
 
-### How It Works Section
+---
 
-Explain the request flow in plain English with a numbered list:
+## How It Works
+
 1. User sends a message through the chat UI
 2. FastAPI validates the request using Pydantic models
-3. QueryClassifier analyzes the prompt (heuristic first, LLM fallback for uncertain cases)
-4. ModelRouter selects the optimal model considering query type, VRAM state, and fallback availability
-5. PromptService builds an enhanced prompt with the right strategy (chain-of-thought, creative, technical, or direct)
-6. OllamaService sends the request to the local model and streams tokens back
-7. Response streams to the browser via SSE, appearing character by character
+3. `QueryClassifier` analyzes the prompt (heuristic first, LLM fallback for uncertain cases)
+4. `ModelRouter` selects the optimal model considering query type, VRAM state, and fallback availability
+5. `PromptService` builds an enhanced prompt with the right strategy (chain-of-thought, creative, technical, or direct)
+6. `OllamaService` sends the request to the local model and streams tokens back
+7. Response streams to the browser via SSE, appearing token by token
 8. Full metadata (model used, latency, tokens, classification, strategy) shown as badges below the response
 
-### Optimizations Section
+---
 
-List all 7 optimizations with one-line explanations:
-1. Model Preloading — Default model loaded into VRAM on startup, eliminating 5-15 second cold starts
-2. VRAM-Aware Routing — Tracks loaded models and avoids unnecessary 4-7 second swap overhead
-3. Quantization Awareness — Q4_K_M quantization reduces 14GB models to ~4.7GB with only 1-3% quality loss
-4. Two-Tier Classification — Heuristic handles 80% of queries in <1ms, LLM fallback only for ambiguous cases
-5. Response Caching — LRU cache for deterministic (low temperature) queries returns results in <1ms
-6. Circuit Breaker — Fails fast after 3 consecutive Ollama failures instead of 90-second timeout chains
-7. Context Window Management — Estimates token usage and warns before hitting model limits
+## Optimizations
 
-### API Endpoints Section
+1. **Model Preloading** — Default model loaded into VRAM on startup, eliminating 5-15 second cold starts
+2. **VRAM-Aware Routing** — Tracks loaded models and avoids unnecessary 4-7 second swap overhead
+3. **Quantization Awareness** — Q4_K_M quantization reduces 14GB models to ~4.7GB with only 1-3% quality loss
+4. **Two-Tier Classification** — Heuristic handles 80% of queries in <1ms, LLM fallback only for ambiguous cases
+5. **Response Caching** — LRU cache for deterministic (low temperature) queries returns results in <1ms
+6. **Circuit Breaker** — Fails fast after 3 consecutive Ollama failures instead of 90-second timeout chains
+7. **Context Window Management** — Estimates token usage and warns before hitting model limits
 
-List all endpoints with method, path, and one-line description:
+---
 
-```markdown
+## API Endpoints
+
 | Method | Endpoint                    | Description                              |
 |--------|----------------------------|------------------------------------------|
 | GET    | /                          | Chat UI interface                        |
@@ -193,31 +172,28 @@ List all endpoints with method, path, and one-line description:
 | GET    | /api/analytics             | Usage stats, latencies, cache hit rates   |
 | POST   | /api/analytics/reset       | Reset analytics counters                  |
 | GET    | /docs                      | Auto-generated API documentation (Swagger)|
-```
 
-### Prerequisites Section
+---
 
-```markdown
 ## Prerequisites
 
 - **Python 3.12+** — [Download](https://www.python.org/downloads/)
 - **Ollama** — [Download](https://ollama.com/download)
 - **Git** — [Download](https://git-scm.com/downloads)
 - **GPU with 8GB+ VRAM** (recommended) or CPU-only (slower)
-```
 
-### Quick Start / Setup Section
+---
 
-Step-by-step instructions for anyone cloning the repo:
-
-```markdown
 ## Quick Start
 
 ### 1. Clone the repository
+```bash
 git clone https://github.com/Ashuytosh/ai-inference-gateway.git
 cd ai-inference-gateway
+```
 
 ### 2. Create virtual environment
+```bash
 python -m venv venv
 
 # Windows
@@ -225,47 +201,45 @@ python -m venv venv
 
 # Mac/Linux
 source venv/bin/activate
+```
 
 ### 3. Install dependencies
+```bash
 pip install -r requirements.txt
+```
 
 ### 4. Install Ollama and pull models
-# Install Ollama from https://ollama.com/download
-# Then pull the required models:
-
+Install Ollama from [ollama.com/download](https://ollama.com/download), then pull the required models:
+```bash
 ollama pull gemma3:4b
 ollama pull phi4-mini
 ollama pull qwen2.5:7b
 ollama pull qwen2.5-coder:7b
 ollama pull mistral:7b
-
-### 5. Configure environment
-# Copy the example .env or create one:
-# The defaults work out of the box, but you can customize:
-
-OLLAMA_BASE_URL=http://localhost:11434
-DEFAULT_MODEL=gemma3:4b
-DEFAULT_TEMPERATURE=0.7
-DEFAULT_MAX_TOKENS=1024
-LOG_LEVEL=INFO
-REQUEST_TIMEOUT=30
-RATE_LIMIT_REQUESTS=30
-RATE_LIMIT_WINDOW=60
-
-### 6. Start Ollama
-ollama serve
-# Or just open the Ollama desktop app
-
-### 7. Start the gateway
-uvicorn app.main:app --reload --port 8000
-
-### 8. Open the UI
-# Navigate to http://localhost:8000 in your browser
 ```
 
-### System Requirements Section
+### 5. Configure environment
+Copy `.env.example` to `.env` and adjust if needed — the defaults work out of the box:
+```bash
+cp .env.example .env
+```
 
-```markdown
+### 6. Start Ollama
+```bash
+ollama serve
+# Or just open the Ollama desktop app
+```
+
+### 7. Start the gateway
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+### 8. Open the UI
+Navigate to [http://localhost:8000](http://localhost:8000) in your browser.
+
+---
+
 ## System Requirements
 
 ### Minimum (CPU-only, slower inference)
@@ -288,15 +262,12 @@ uvicorn app.main:app --reload --port 8000
 - NVIDIA RTX 5060 (8GB VRAM)
 - 24 GB RAM
 - Windows 11 with WSL2
-```
 
-### Project Structure Section
+---
 
-Show the full folder tree with one-line descriptions:
-
-```markdown
 ## Project Structure
 
+```
 ai-inference-gateway/
 ├── app/
 │   ├── main.py                 # FastAPI app, startup/shutdown, middleware, routers
@@ -344,14 +315,16 @@ ai-inference-gateway/
 │       └── phase-8-*.md        # Documentation
 ├── CLAUDE.md                   # Claude Code project instructions
 ├── requirements.txt            # Python dependencies
-├── .env                        # Environment configuration
+├── .env                        # Environment configuration (not committed)
+├── .env.example                # Documented configuration template
 ├── .gitignore                  # Git ignore rules
+├── LICENSE                     # MIT license
 └── README.md                   # This file
 ```
 
-### Key Design Decisions Section
+---
 
-Explain 4-5 important architectural choices and WHY:
+## Key Design Decisions
 
 1. **Local LLMs over Cloud APIs** — Zero cost, no API keys, no rate
    limits from providers, full privacy. Tradeoff: limited to 7B
@@ -379,12 +352,11 @@ Explain 4-5 important architectural choices and WHY:
    process. For an AI gateway focused on backend intelligence, this
    is the right complexity tradeoff.
 
-### Screenshots Section
+---
 
-Add placeholder text for screenshots:
-
-```markdown
 ## Screenshots
+
+> See [`screenshots/SCREENSHOTS.md`](screenshots/SCREENSHOTS.md) for capture instructions.
 
 ### Chat Interface
 ![Chat Interface](screenshots/chat-interface.png)
@@ -405,19 +377,15 @@ Add placeholder text for screenshots:
 ### API Documentation
 ![API Docs](screenshots/api-docs.png)
 *Auto-generated Swagger documentation at /docs*
-```
 
-### License Section
+---
 
-```markdown
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
-```
 
-### Author Section
+---
 
-```markdown
 ## Author
 
 **Ashutosh** — [GitHub](https://github.com/Ashuytosh)
@@ -425,181 +393,3 @@ MIT License — see [LICENSE](LICENSE) for details.
 Built as part of an AI Engineering portfolio project demonstrating
 production-grade LLM infrastructure, intelligent routing, and
 full-stack AI system design.
-```
-
----
-
-## 2. LICENSE File
-
-Create a LICENSE file in the project root with MIT license text.
-Use the current year (2026) and name "Ashutosh".
-
----
-
-## 3. Screenshots
-
-Create a screenshots/ directory in the project root.
-
-Claude Code should try to capture screenshots if possible using
-a headless browser or provide instructions for the developer to
-take these 5 screenshots manually:
-
-1. **chat-interface.png** — Full chat window showing a conversation
-   with streaming response and metadata badges visible
-2. **model-selection.png** — Sidebar with model dropdown open showing
-   all 5 models + Auto option
-3. **structured-output.png** — Chat showing a sentiment analysis
-   response with parsed JSON
-4. **analytics.png** — The /api/analytics JSON response (can be
-   browser screenshot of the JSON)
-5. **api-docs.png** — The /docs Swagger UI page showing all endpoints
-
-If screenshots cannot be taken programmatically, create the
-screenshots/ directory with a SCREENSHOTS.md file inside explaining
-which screenshots to take and where to save them.
-
----
-
-## 4. .env.example File
-
-Create a .env.example file (committed to git, unlike .env) that
-shows all available configuration with comments:
-
-```bash
-# ===========================================
-# AI Inference Gateway — Configuration
-# ===========================================
-
-# Ollama Connection
-OLLAMA_BASE_URL=http://localhost:11434
-DEFAULT_MODEL=gemma3:4b
-DEFAULT_TEMPERATURE=0.7
-DEFAULT_MAX_TOKENS=1024
-REQUEST_TIMEOUT=30
-
-# Keep-Alive (how long model stays in VRAM after last use)
-OLLAMA_KEEP_ALIVE=30m
-
-# Application
-APP_NAME=AI Inference Gateway
-APP_VERSION=1.0.0
-LOG_LEVEL=INFO
-
-# Response Cache
-CACHE_MAX_SIZE=100
-CACHE_TTL_SECONDS=600
-CACHE_TEMPERATURE_THRESHOLD=0.31
-
-# Rate Limiting
-RATE_LIMIT_REQUESTS=30
-RATE_LIMIT_WINDOW=60
-
-# Circuit Breaker
-CIRCUIT_BREAKER_THRESHOLD=3
-CIRCUIT_BREAKER_RESET=30
-
-# Model Preloading
-PRELOAD_MODEL_ON_STARTUP=true
-```
-
----
-
-## 5. Update .gitignore
-
-Make sure .gitignore includes:
-```
-__pycache__/
-*.pyc
-.env
-venv/
-.venv/
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-.vscode/
-screenshots/*.png
-```
-
-Note: Remove screenshots/*.png from gitignore if you want to commit
-actual screenshots. Keep it if screenshots are large.
-
----
-
-## 6. Date/Time Injection
-
-One small code change — update app/services/prompt_service.py to
-inject current date and time into every system prompt:
-
-In the build_messages() method or get_system_prompt() method, prepend:
-```
-f"Current date and time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}. "
-```
-
-This ensures LLMs know today's date when users ask time-sensitive
-questions. Add a comment explaining why this is needed: "Local LLMs
-have no internet access and only know their training cutoff date.
-Injecting the current timestamp grounds their responses in the
-correct time context."
-
----
-
-## 7. Verification Checklist
-
-### README renders correctly:
-Open the GitHub repo page — README should render with badges,
-architecture diagram, tables, and all sections visible.
-
-### .env.example exists and is committed:
-```bash
-git ls-files .env.example
-```
-Should show the file.
-
-### LICENSE exists:
-```bash
-cat LICENSE
-```
-Should show MIT license.
-
-### Screenshots directory exists:
-```bash
-ls screenshots/
-```
-Should contain SCREENSHOTS.md or actual screenshots.
-
-### Date injection works:
-```bash
-curl -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "What is todays date?"}'
-```
-Should return the correct current date.
-
-### Project runs from clean clone:
-Mentally walk through the Quick Start steps — would a new developer
-be able to follow them and get the app running?
-
----
-
-## 8. Final Git Push
-
-After everything is done:
-```bash
-git add -A
-git commit -m "feat(phase-8): documentation, README, and final polish"
-git push origin main
-```
-
----
-
-## 9. Files Modified in This Phase
-
-| File                  | Action                              |
-|----------------------|-------------------------------------|
-| README.md            | Full professional documentation     |
-| LICENSE              | NEW — MIT license                   |
-| .env.example         | NEW — documented config template    |
-| .gitignore           | Updated with final ignores          |
-| screenshots/         | NEW — directory for UI screenshots  |
-| app/services/prompt_service.py | Add date/time injection    |
