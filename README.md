@@ -356,18 +356,16 @@ ai-inference-gateway/
 
 ## Screenshots
 
-> See [`screenshots/SCREENSHOTS.md`](screenshots/SCREENSHOTS.md) for capture instructions.
-
 ### Chat Interface
-![Chat Interface](screenshots/chat-interface.png)
+![Chat Interface](screenshots/chat_interface.png)
 *Dark-themed chat with streaming responses and metadata badges*
 
 ### Model Selection
-![Model Selection](screenshots/model-selection.png)
+![Model Selection](screenshots/model_selection.png)
 *Auto mode with smart routing or manual model selection*
 
 ### Structured Output
-![Structured Output](screenshots/structured-output.png)
+![Structured Output](screenshots/structured_output.png)
 *Forcing LLM to return validated JSON (sentiment analysis shown)*
 
 ### Analytics Dashboard
@@ -375,7 +373,7 @@ ai-inference-gateway/
 *Request analytics with per-model breakdown and latency percentiles*
 
 ### API Documentation
-![API Docs](screenshots/api-docs.png)
+![API Docs](screenshots/api_docs.png)
 *Auto-generated Swagger documentation at /docs*
 
 ---
